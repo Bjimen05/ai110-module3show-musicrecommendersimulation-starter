@@ -9,3 +9,23 @@ id,title,artist,genre,mood,energy,tempo_bpm,valence,danceability,acousticness
 8,Night Drive Loop,Neon Echo,synthwave,moody,0.75,110,0.49,0.73,0.22
 9,Focus Flow,LoRoom,lofi,focused,0.40,80,0.59,0.60,0.78
 10,Rooftop Lights,Indigo Parade,indie pop,happy,0.76,124,0.81,0.82,0.35
+11,Broken Clocks,Chain Smoke,hip-hop,melancholic,0.65,95,0.38,0.74,0.15
+12,Velvet Nights,Amara Soul,r&b,romantic,0.55,85,0.72,0.68,0.42
+13,Iron Curtain,Razorback,metal,angry,0.97,168,0.22,0.52,0.04
+14,Morning Prelude,Clara Voss,classical,peaceful,0.18,52,0.76,0.22,0.98
+15,Old Dirt Road,The Pines,country,nostalgic,0.44,96,0.68,0.55,0.83
+16,Island Bounce,Coconut Sound,reggae,playful,0.58,88,0.85,0.77,0.61
+17,Autumn Letter,Hollow Oak,folk,bittersweet,0.31,74,0.52,0.48,0.91
+18,River Bottom Blues,Hound & Flame,blues,melancholic,0.47,82,0.34,0.51,0.72
+19,Drop Into Light,AXON,edm,euphoric,0.96,128,0.88,0.94,0.02
+20,Rise Up,Solara,soul,empowering,0.71,108,0.79,0.72,0.54
+21,Groove Tunnel,Funkspot,funk,playful,0.78,115,0.83,0.91,0.28
+22,Fuego Libre,Los Rayos,latin,energetic,0.85,138,0.87,0.89,0.19
+23,Pixel Crush,NOVA7,k-pop,happy,0.88,142,0.90,0.86,0.08
+24,Higher Ground,The Choir,gospel,uplifting,0.67,104,0.91,0.70,0.67
+25,Shadow Market,DRKMODE,trap,dark,0.72,140,0.21,0.82,0.06
+26,Bass Reactor,Coldwire,drum and bass,intense,0.94,174,0.44,0.79,0.03
+27,Cafe Bresil,Jana Luz,bossa nova,relaxed,0.33,84,0.74,0.62,0.88
+28,Static Truth,The Wrecks,punk,angry,0.89,162,0.35,0.64,0.11
+29,Cloud Mirror,Haze Atlas,shoegaze,dreamy,0.52,98,0.58,0.55,0.76
+30,Silk and Rain,Deveux,neo-soul,romantic,0.48,86,0.69,0.65,0.58

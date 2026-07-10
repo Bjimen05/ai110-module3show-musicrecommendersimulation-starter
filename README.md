@@ -19,16 +19,33 @@ Replace this paragraph with your own summary of what your version does.
 
 Explain your design in plain language.
 
+*Spotify and YouTube use song features like genre, mood, tempo, energy and user history like plays, likes and skips, to learn listener's preferences, as well as score possible songs, and rank the best matches at the top of the recommendation list.
+
 Some prompts to answer:
 
 - What features does each `Song` use in your system
   - For example: genre, mood, energy, tempo
+
+  *Each song use mood, genre, valence, energy, tempo, danceability and acousticness in my system.
+
 - What information does your `UserProfile` store
+
+  *It store what their favorite genre, mood, target energy level, whether user prefer acoustic songs
+
 - How does your `Recommender` compute a score for each song
 - How do you choose which songs to recommend
 
+  *Each song is scored against the user's profile using the weighted sum of the 5 features, using a proximity formula so songs closest to the user's preference score highest. Mood matches +2 pts, Genre matches 1+ pts, Energy close to user's target up to 1.5+ pts, Acoustic 1+ pts.
+
+  *After scoring every songs in the catalog with score_song(), the recommender collect all song and score pairs, sort them in descending order, and return the top-k results. User get the k songs with the highest alignment to their profile and an explanation why one song matched
+
 You can include a simple diagram or bullet list if helpful.
 
+https://claude.ai/code/artifact/4e2af624-fd93-4bd4-996c-c5a74bd8a6d0
+
+Potential Biases
+
+  *Mood has the biggest influence, so songs with right mood may rank higher even if they're different genre. Also users that don't like acoustic songs aren't penalized, so acoustic songs may still appear.
 ---
 
 ## Getting Started
