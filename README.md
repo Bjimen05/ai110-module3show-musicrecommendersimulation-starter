@@ -11,7 +11,7 @@ Your goal is to:
 - Evaluate what your system gets right and wrong
 - Reflect on how this mirrors real world AI recommenders
 
-Replace this paragraph with your own summary of what your version does.
+This version scores a small catalog of songs against a user's stated taste (genre, mood, energy, acoustic preference, plus popularity, decade, language, and secondary mood) and returns the top matches with a plain-language explanation for each. It supports multiple ranking strategies (balanced, genre-first, mood-first, energy-focused) and applies a diversity penalty so results don't get dominated by one artist or genre.
 
 ---
 
