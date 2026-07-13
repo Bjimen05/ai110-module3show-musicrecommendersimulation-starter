@@ -82,6 +82,8 @@ Prompts:
 
 One weakness I found is there were no artist variety, which mean the system don't prevent recommending multiple songs by the same artist, as well as acoustic bonus is one-way, so users who like acoustic songs get a bonus but those who don't arent't penalized, so acoustic songs still appear.
 
+**Update - Diversity Penalty:** I fixed the artist-variety weakness by adding a diversity penalty to `recommend_songs`. Every time a song is picked for the results, any remaining song by the same artist or genre gets a small score penalty that grows the more times that artist/genre repeats. This improves fairness because before this change, one artist or genre that happened to score well could crowd out the rest of the catalog and take most or all of the top spots, even if other songs were a nearly-equal match. Now the recommendations spread across more artists and genres instead of over-representing whichever one the scoring formula happens to favor.
+
 ---
 
 ## 7. Evaluation  

@@ -9,12 +9,27 @@ You will implement the functions in recommender.py:
 - recommend_songs
 """
 
-from recommender import load_songs, recommend_songs
+import sys
+import textwrap
+
+from tabulate import tabulate
+
+from recommender import load_songs, recommend_songs, STRATEGIES
 
 
 def main() -> None:
+    # Pick a ranking strategy from the command line, e.g.:
+    #   python -m src.main mood-first
+    # Falls back to "balanced" if no name is given.
+    strategy_name = sys.argv[1] if len(sys.argv) > 1 else "balanced"
+    strategy = STRATEGIES.get(strategy_name)
+    if strategy is None:
+        print(f"Unknown strategy '{strategy_name}'. Available: {', '.join(STRATEGIES)}")
+        return
+
     songs = load_songs("data/songs.csv")
     print(f"Loaded songs: {len(songs)}")
+    print(f"Ranking strategy: {strategy.name}")
 
     # Sample user preference profiles
     user_prefs_list = [
@@ -24,7 +39,7 @@ def main() -> None:
     ]
 
     for user_prefs in user_prefs_list:
-        recommendations = recommend_songs(user_prefs, songs, k=5)
+        recommendations = recommend_songs(user_prefs, songs, k=5, strategy=strategy)
 
         print("\nUser Profile")
         print("-" * 40)
@@ -33,13 +48,19 @@ def main() -> None:
         print(f"Energy: {user_prefs['energy']}")
 
         print("\nTop Recommendations")
-        print("=" * 40)
+        table_rows = []
         for rank, (song, score, explanation) in enumerate(recommendations, start=1):
-            print(f"\n{rank}. {song['title']} - {song['artist']}")
-            print(f"   Score: {score:.2f}")
-            print("   Because:")
-            for reason in explanation.split("; "):
-                print(f"     - {reason}")
+            reasons = "\n".join(
+                textwrap.fill(f"- {reason}", width=40)
+                for reason in explanation.split("; ")
+            )
+            table_rows.append([rank, song["title"], song["artist"], f"{score:.2f}", reasons])
+
+        print(tabulate(
+            table_rows,
+            headers=["#", "Title", "Artist", "Score", "Reasons"],
+            tablefmt="grid",
+        ))
         print()
 
 

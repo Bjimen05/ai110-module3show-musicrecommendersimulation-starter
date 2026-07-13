@@ -1,4 +1,5 @@
 import csv
+from abc import ABC, abstractmethod
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 
@@ -18,6 +19,11 @@ class Song:
     valence: float
     danceability: float
     acousticness: float
+    popularity: int = 50
+    release_decade: str = ""
+    secondary_moods: str = ""
+    language: str = "english"
+    explicit: bool = False
 
 @dataclass
 class UserProfile:
@@ -29,6 +35,11 @@ class UserProfile:
     favorite_mood: str
     target_energy: float
     likes_acoustic: bool
+    secondary_mood: Optional[str] = None
+    preferred_decade: Optional[str] = None
+    preferred_language: Optional[str] = None
+    min_popularity: Optional[int] = None
+    avoid_explicit: bool = False
 
 class Recommender:
     """
@@ -46,11 +57,12 @@ class Recommender:
         # TODO: Implement explanation logic
         return "Explanation placeholder"
 
-INT_FIELDS = {"id", "tempo_bpm"}
+INT_FIELDS = {"id", "tempo_bpm", "popularity"}
 FLOAT_FIELDS = {"energy", "valence", "danceability", "acousticness"}
+BOOL_FIELDS = {"explicit"}
 
 def load_songs(csv_path: str) -> List[Dict]:
-    """Reads a songs CSV into a list of dicts, converting numeric fields to int/float."""
+    """Reads a songs CSV into a list of dicts, converting numeric/boolean fields."""
     print(f"Loading songs from {csv_path}...")
     songs = []
     with open(csv_path, newline="", encoding="utf-8") as f:
@@ -60,43 +72,165 @@ def load_songs(csv_path: str) -> List[Dict]:
                 row[field] = int(row[field])
             for field in FLOAT_FIELDS:
                 row[field] = float(row[field])
+            for field in BOOL_FIELDS:
+                row[field] = row[field].strip().lower() == "true"
             songs.append(row)
     return songs
 
+# Default weight for each scoring factor. Concrete strategies override a
+# subset of these to shift emphasis toward genre, mood, or energy.
+DEFAULT_WEIGHTS = {
+    "mood": 2.0,
+    "genre": 1.0,
+    "energy": 1.5,
+    "acoustic": 1.0,
+    "secondary_mood": 1.0,
+    "decade": 0.5,
+    "language": 0.5,
+    "popularity": 1.0,
+    "explicit_penalty": 2.0,
+}
+
+class ScoringStrategy(ABC):
+    """
+    Strategy pattern: every concrete strategy scores a song the same way
+    (same rules, same reasons) but with a different weight per factor, so
+    swapping strategies changes *what the recommender emphasizes* without
+    touching recommend_songs or main.py.
+    """
+    name = "base"
+    weights: Dict[str, float] = DEFAULT_WEIGHTS
+
+    def score(self, user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
+        score = 0.0
+        reasons = []
+        w = self.weights
+
+        if song["mood"] == user_prefs.get("mood"):
+            score += w["mood"]
+            reasons.append(f"Mood match: {song['mood']} (+{w['mood']:.2f})")
+
+        if song["genre"] == user_prefs.get("genre"):
+            score += w["genre"]
+            reasons.append(f"Genre match: {song['genre']} (+{w['genre']:.2f})")
+
+        target_energy = user_prefs.get("energy")
+        if target_energy is not None:
+            energy_points = w["energy"] * (1 - abs(song["energy"] - target_energy))
+            score += energy_points
+            reasons.append(f"Energy close to target {target_energy} (+{energy_points:.2f})")
+
+        if user_prefs.get("likes_acoustic") and song["acousticness"] > 0.6:
+            score += w["acoustic"]
+            reasons.append(f"Acoustic bonus (+{w['acoustic']:.2f})")
+
+        secondary_mood = user_prefs.get("secondary_mood")
+        if secondary_mood and secondary_mood in song["secondary_moods"].split("|"):
+            score += w["secondary_mood"]
+            reasons.append(f"Secondary mood match: {secondary_mood} (+{w['secondary_mood']:.2f})")
+
+        preferred_decade = user_prefs.get("preferred_decade")
+        if preferred_decade and song["release_decade"] == preferred_decade:
+            score += w["decade"]
+            reasons.append(f"Release decade match: {preferred_decade} (+{w['decade']:.2f})")
+
+        preferred_language = user_prefs.get("preferred_language")
+        if preferred_language and song["language"] == preferred_language:
+            score += w["language"]
+            reasons.append(f"Language match: {preferred_language} (+{w['language']:.2f})")
+
+        min_popularity = user_prefs.get("min_popularity")
+        if min_popularity is not None and song["popularity"] >= min_popularity:
+            popularity_points = w["popularity"] * (song["popularity"] / 100)
+            score += popularity_points
+            reasons.append(f"Popularity bonus: {song['popularity']} (+{popularity_points:.2f})")
+
+        if user_prefs.get("avoid_explicit") and song["explicit"]:
+            score -= w["explicit_penalty"]
+            reasons.append(f"Explicit content penalty (-{w['explicit_penalty']:.2f})")
+
+        return score, reasons
+
+class BalancedStrategy(ScoringStrategy):
+    """The original Algorithm Recipe weights - no single factor dominates."""
+    name = "balanced"
+    weights = DEFAULT_WEIGHTS
+
+class GenreFirstStrategy(ScoringStrategy):
+    """Genre match matters most; mood and energy take a back seat."""
+    name = "genre-first"
+    weights = {**DEFAULT_WEIGHTS, "genre": 3.0, "mood": 1.0, "energy": 1.0}
+
+class MoodFirstStrategy(ScoringStrategy):
+    """Mood and secondary mood tags matter most; genre barely counts."""
+    name = "mood-first"
+    weights = {**DEFAULT_WEIGHTS, "mood": 4.0, "secondary_mood": 2.0, "genre": 0.5, "energy": 1.0}
+
+class EnergyFocusedStrategy(ScoringStrategy):
+    """Matching the target energy level matters most."""
+    name = "energy-focused"
+    weights = {**DEFAULT_WEIGHTS, "energy": 4.0, "mood": 1.0, "genre": 0.5}
+
+# Registry so callers (e.g. main.py) can look strategies up by name.
+STRATEGIES: Dict[str, ScoringStrategy] = {
+    strategy.name: strategy
+    for strategy in (
+        BalancedStrategy(),
+        GenreFirstStrategy(),
+        MoodFirstStrategy(),
+        EnergyFocusedStrategy(),
+    )
+}
+
 def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
-    """Scores a song against user preferences using the weighted Algorithm Recipe, returning (score, reasons)."""
-    score = 0.0
-    reasons = []
+    """Scores a song using the default (balanced) strategy, returning (score, reasons)."""
+    return STRATEGIES["balanced"].score(user_prefs, song)
 
-    if song["mood"] == user_prefs.get("mood"):
-        score += 2.0
-        reasons.append(f"Mood match: {song['mood']} (+2.0)")
-
-    if song["genre"] == user_prefs.get("genre"):
-        score += 1.0
-        reasons.append(f"Genre match: {song['genre']} (+1.0)")
-
-    target_energy = user_prefs.get("energy")
-    if target_energy is not None:
-        energy_points = 1.5 * (1 - abs(song["energy"] - target_energy))
-        score += energy_points
-        reasons.append(f"Energy close to target {target_energy} (+{energy_points:.2f})")
-
-    if user_prefs.get("likes_acoustic") and song["acousticness"] > 0.6:
-        score += 1.0
-        reasons.append("Acoustic bonus (+1.0)")
-
-    return score, reasons
-
-def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tuple[Dict, float, str]]:
-    """Scores every song, sorts by score descending, and returns the top k as (song, score, explanation)."""
-    scored = [
-        (song, *score_song(user_prefs, song))
+def recommend_songs(
+    user_prefs: Dict,
+    songs: List[Dict],
+    k: int = 5,
+    strategy: Optional[ScoringStrategy] = None,
+    artist_penalty: float = 1.0,
+    genre_penalty: float = 0.5,
+) -> List[Tuple[Dict, float, str]]:
+    """
+    Scores every song with the given strategy (balanced by default), then picks
+    the top k one at a time. Each time a song is picked, later songs by the same
+    artist or genre take a growing penalty, so the results don't fill up with
+    near-duplicates just because one artist/genre scored well.
+    Set artist_penalty=0 and genre_penalty=0 to disable and get raw top-k by score.
+    """
+    strategy = strategy or STRATEGIES["balanced"]
+    remaining = [
+        (song, *strategy.score(user_prefs, song))
         for song in songs
     ]
-    scored.sort(key=lambda entry: entry[1], reverse=True)
+    remaining.sort(key=lambda entry: entry[1], reverse=True)
 
-    return [
-        (song, score, "; ".join(reasons))
-        for song, score, reasons in scored[:k]
-    ]
+    artist_counts: Dict[str, int] = {}
+    genre_counts: Dict[str, int] = {}
+    results = []
+
+    while remaining and len(results) < k:
+        def diversity_penalty(entry):
+            song = entry[0]
+            return (
+                artist_penalty * artist_counts.get(song["artist"], 0)
+                + genre_penalty * genre_counts.get(song["genre"], 0)
+            )
+
+        best = max(remaining, key=lambda entry: entry[1] - diversity_penalty(entry))
+        remaining.remove(best)
+
+        song, score, reasons = best
+        penalty = diversity_penalty(best)
+        final_reasons = list(reasons)
+        if penalty > 0:
+            final_reasons.append(f"Diversity penalty for repeated artist/genre (-{penalty:.2f})")
+
+        results.append((song, score - penalty, "; ".join(final_reasons)))
+        artist_counts[song["artist"]] = artist_counts.get(song["artist"], 0) + 1
+        genre_counts[song["genre"]] = genre_counts.get(song["genre"], 0) + 1
+
+    return results
