@@ -1,51 +1,80 @@
 # 🎵 Music Recommender Simulation
 
-## Project Summary
+A content-based music recommendation engine built from scratch in Python — no external ML libraries, just an explicit, explainable scoring model over song and user-taste features.
 
-In this project you will build and explain a small music recommender system.
+Given a listener's taste profile (genre, mood, target energy, acoustic preference, and more), the system scores every song in a catalog, ranks the top matches, and explains **why** each song was recommended. It supports multiple swappable ranking strategies and a diversity penalty so results don't get dominated by a single artist or genre.
 
-Your goal is to:
+## Table of Contents
 
-- Represent songs and a user "taste profile" as data
-- Design a scoring rule that turns that data into recommendations
-- Evaluate what your system gets right and wrong
-- Reflect on how this mirrors real world AI recommenders
-
-This version scores a small catalog of songs against a user's stated taste (genre, mood, energy, acoustic preference, plus popularity, decade, language, and secondary mood) and returns the top matches with a plain-language explanation for each. It supports multiple ranking strategies (balanced, genre-first, mood-first, energy-focused) and applies a diversity penalty so results don't get dominated by one artist or genre.
+- [Overview](#overview)
+- [How It Works](#how-it-works)
+- [Getting Started](#getting-started)
+- [Sample Output](#sample-output)
+- [Testing](#testing)
+- [Project Structure](#project-structure)
+- [Adversarial Testing & Robustness](#adversarial-testing--robustness)
+- [Design Decisions & Reflection](#design-decisions--reflection)
+- [Limitations](#limitations)
 
 ---
 
-## How The System Works
+## Overview
 
-Explain your design in plain language.
+This project simulates how systems like Spotify or YouTube Music turn stated (or inferred) listener preferences into ranked recommendations. It's built around three core ideas:
 
-*Spotify and YouTube use song features like genre, mood, tempo, energy and user history like plays, likes and skips, to learn listener's preferences, as well as score possible songs, and rank the best matches at the top of the recommendation list.
+- **Represent** songs and a user's taste as structured data
+- **Score** each song against a user profile using a transparent, weighted rule
+- **Explain** every recommendation in plain language, not just a number
 
-Some prompts to answer:
+**Key features:**
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
+- 🎯 Weighted, multi-factor scoring (mood, genre, energy proximity, acoustic preference, decade, language, popularity, explicit-content filtering)
+- 🔀 Four swappable ranking strategies (`balanced`, `genre-first`, `mood-first`, `energy-focused`) via a Strategy pattern
+- 🌈 A diversity penalty that prevents one artist or genre from dominating the top-k results
+- 🛡️ Input validation and defensive guards (energy clamping, case-insensitive matching, non-negative `k`)
+- ✅ Unit tests covering the OOP interface (`Song`, `UserProfile`, `Recommender`)
 
-  *Each song use mood, genre, valence, energy, tempo, danceability and acousticness in my system.
+---
 
-- What information does your `UserProfile` store
+## How It Works
 
-  *It store what their favorite genre, mood, target energy level, whether user prefer acoustic songs
+### Data model
 
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+| Class | Represents | Key fields |
+|---|---|---|
+| `Song` | A track and its attributes | `genre`, `mood`, `energy`, `tempo_bpm`, `valence`, `danceability`, `acousticness`, `popularity`, `release_decade`, `secondary_moods`, `language`, `explicit` |
+| `UserProfile` | A listener's taste | `favorite_genre`, `favorite_mood`, `target_energy`, `likes_acoustic`, `secondary_mood`, `preferred_decade`, `preferred_language`, `min_popularity`, `avoid_explicit` |
 
-  *Each song is scored against the user's profile using the weighted sum of the 5 features, using a proximity formula so songs closest to the user's preference score highest. Mood matches +2 pts, Genre matches 1+ pts, Energy close to user's target up to 1.5+ pts, Acoustic 1+ pts.
+### Scoring
 
-  *After scoring every songs in the catalog with score_song(), the recommender collect all song and score pairs, sort them in descending order, and return the top-k results. User get the k songs with the highest alignment to their profile and an explanation why one song matched
+Each song earns points for how well it matches the user's profile:
 
-You can include a simple diagram or bullet list if helpful.
+| Signal | Weight (balanced strategy) |
+|---|---|
+| Mood match | +2.0 |
+| Genre match | +1.0 |
+| Energy proximity to target | up to +1.5 |
+| Acoustic bonus | +1.0 |
+| Secondary mood match | +1.0 |
+| Release decade match | +0.5 |
+| Language match | +0.5 |
+| Popularity bonus | up to +1.0 |
+| Explicit content (if avoided) | −2.0 |
 
-https://claude.ai/code/artifact/4e2af624-fd93-4bd4-996c-c5a74bd8a6d0
+Every song is scored, sorted highest to lowest, and the top `k` are returned along with a plain-language explanation built from whichever rules fired. A **diversity penalty** grows each time a song by the same artist or genre is picked, so later picks from an over-represented artist/genre are pushed down — keeping the results varied instead of one artist sweeping the list.
 
-Potential Biases
+Four ranking strategies (`balanced`, `genre-first`, `mood-first`, `energy-focused`) reuse the same scoring rules with different weight emphasis, selectable from the command line.
 
-  *Mood has the biggest influence, so songs with right mood may rank higher even if they're different genre. Also users that don't like acoustic songs aren't penalized, so acoustic songs may still appear.
+### Robustness
+
+Earlier iterations of this project had real bugs — worth calling out because finding and fixing them was part of the exercise:
+
+- Exact string matching meant `"Pop"` never matched `"pop"` — fixed with case/whitespace normalization.
+- An out-of-range `target_energy` (e.g. `5.0`) could tank an otherwise perfect match — fixed by clamping energy to `[0, 1]`.
+- A negative `k` silently returned almost the entire catalog due to Python's slice semantics — fixed by clamping `k` to a non-negative value.
+
+See [Adversarial Testing & Robustness](#adversarial-testing--robustness) for the full writeup, and [`model_card.md`](model_card.md) for a deeper reflection on design tradeoffs and bias.
+
 ---
 
 ## Getting Started
@@ -58,38 +87,36 @@ Potential Biases
    python -m venv .venv
    source .venv/bin/activate      # Mac or Linux
    .venv\Scripts\activate         # Windows
+   ```
 
-2. Install dependencies
+2. Install dependencies:
 
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 3. Run the app:
 
-```bash
-python -m src.main
-```
+   ```bash
+   python -m src.main
+   ```
 
-### Running Tests
+   Optionally pick a ranking strategy:
 
-Run the starter tests with:
+   ```bash
+   python -m src.main mood-first
+   ```
 
-```bash
-pytest
-```
-
-You can add more tests in `tests/test_recommender.py`.
+   Available strategies: `balanced` (default), `genre-first`, `mood-first`, `energy-focused`.
 
 ---
 
-## Sample Recommendation Output
-
-Paste a sample of your recommender's output here as a text block so a reader can see what it produces:
+## Sample Output
 
 ```
 Loading songs from data/songs.csv...
 Loaded songs: 30
+Ranking strategy: balanced
 
 User Profile
 ----------------------------------------
@@ -98,323 +125,82 @@ Mood: happy
 Energy: 0.8
 
 Top Recommendations
-========================================
-
-1. Sunrise City - Neon Echo
-   Score: 4.47
-   Because:
-     - Mood match: happy (+2.0)
-     - Genre match: pop (+1.0)
-     - Energy close to target 0.8 (+1.47)
-
-2. Rooftop Lights - Indigo Parade
-   Score: 3.44
-   Because:
-     - Mood match: happy (+2.0)
-     - Energy close to target 0.8 (+1.44)
-
-3. Pixel Crush - NOVA7
-   Score: 3.38
-   Because:
-     - Mood match: happy (+2.0)
-     - Energy close to target 0.8 (+1.38)
-
-4. Gym Hero - Max Pulse
-   Score: 2.30
-   Because:
-     - Genre match: pop (+1.0)
-     - Energy close to target 0.8 (+1.30)
-
-5. Groove Tunnel - Funkspot
-   Score: 1.47
-   Because:
-     - Energy close to target 0.8 (+1.47)
++-----+-------------------+---------------+---------+------------------------------------------+
+|   # | Title             | Artist        |   Score | Reasons                                   |
++=====+===================+===============+=========+============================================+
+|   1 | Sunrise City      | Neon Echo     |    4.47 | - Mood match: happy (+2.00)                |
+|     |                   |               |         | - Genre match: pop (+1.00)                 |
+|     |                   |               |         | - Energy close to target 0.8 (+1.47)       |
++-----+-------------------+---------------+---------+------------------------------------------+
+|   2 | Rooftop Lights    | Indigo Parade |    3.44 | - Mood match: happy (+2.00)                |
+|     |                   |               |         | - Energy close to target 0.8 (+1.44)       |
++-----+-------------------+---------------+---------+------------------------------------------+
+|   3 | Pixel Crush       | NOVA7         |    3.38 | - Mood match: happy (+2.00)                |
+|     |                   |               |         | - Energy close to target 0.8 (+1.38)       |
++-----+-------------------+---------------+---------+------------------------------------------+
+```
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or demo video link here -->
 
 ---
 
-## Adversarial / Edge Case Testing
+## Testing
 
-To stress-test `score_song` and `recommend_songs`, I ran the recommender against several adversarial user profiles and observed the top 5 results (or fewer, where noted) from the terminal.
+Run the test suite with:
 
-### Adversarial 1: Out-of-range `target_energy`
-
-Profile: `{"genre": "metal", "mood": "angry", "energy": 5.0}`
-
-The formula `1.5 * (1 - abs(song["energy"] - target_energy))` assumes energy stays in `[0, 1]` and is never clamped, so an out-of-range target drags every score deeply negative — even the "perfect" mood+genre match.
-
-```
-============================================================
-Adversarial 1: Out-of-range target_energy
-Profile: {'genre': 'metal', 'mood': 'angry', 'energy': 5.0}
-----------------------------------------
-Returned 5 results (k=5)
-
-Top Recommendations
-========================================
-1. Iron Curtain - Razorback
-   Score: -1.54
-   Because:
-     - Mood match: angry (+2.0)
-     - Genre match: metal (+1.0)
-     - Energy close to target 5.0 (+-4.54)
-
-2. Static Truth - The Wrecks
-   Score: -2.67
-   Because:
-     - Mood match: angry (+2.0)
-     - Energy close to target 5.0 (+-4.67)
-
-3. Drop Into Light - AXON
-   Score: -4.56
-   Because:
-     - Energy close to target 5.0 (+-4.56)
-
-4. Bass Reactor - Coldwire
-   Score: -4.59
-   Because:
-     - Energy close to target 5.0 (+-4.59)
-
-5. Gym Hero - Max Pulse
-   Score: -4.61
-   Because:
-     - Energy close to target 5.0 (+-4.61)
+```bash
+pytest
 ```
 
-### Adversarial 2: Non-numeric `energy` (type crash)
+Tests in [`tests/test_recommender.py`](tests/test_recommender.py) exercise the OOP interface end-to-end (`Recommender.recommend`, `Recommender.explain_recommendation`) — not a separate mock path — so a passing suite reflects the same code that runs in `main.py`.
 
-Profile: `{"genre": "pop", "mood": "happy", "energy": "high"}`
+---
 
-`user_prefs` is an unvalidated dict, so a non-numeric energy value crashes scoring entirely instead of degrading gracefully.
-
-```
-============================================================
-Adversarial 2: Non-numeric energy (type crash)
-Profile: {'genre': 'pop', 'mood': 'happy', 'energy': 'high'}
-----------------------------------------
-CRASHED: TypeError: unsupported operand type(s) for -: 'float' and 'str'
-```
-
-### Adversarial 3: Negative `k` (k=-1)
-
-Profile: `{"genre": "pop", "mood": "happy", "energy": 0.8}`, called with `k=-1`
-
-Python's slice `scored[:-1]` drops only the last element rather than returning zero results, so a negative `k` silently returns nearly the entire catalog (29 of 30 songs) instead of an empty list.
+## Project Structure
 
 ```
-============================================================
-Adversarial 3: Negative k (k=-1)
-Profile: {'genre': 'pop', 'mood': 'happy', 'energy': 0.8}
-----------------------------------------
-Returned 29 results (k=-1)
-
-Top Recommendations
-========================================
-1. Sunrise City - Neon Echo
-   Score: 4.47
-   Because:
-     - Mood match: happy (+2.0)
-     - Genre match: pop (+1.0)
-     - Energy close to target 0.8 (+1.47)
-
-2. Rooftop Lights - Indigo Parade
-   Score: 3.44
-   Because:
-     - Mood match: happy (+2.0)
-     - Energy close to target 0.8 (+1.44)
-
-3. Pixel Crush - NOVA7
-   Score: 3.38
-   Because:
-     - Mood match: happy (+2.0)
-     - Energy close to target 0.8 (+1.38)
-
-4. Gym Hero - Max Pulse
-   Score: 2.30
-   Because:
-     - Genre match: pop (+1.0)
-     - Energy close to target 0.8 (+1.30)
-
-5. Groove Tunnel - Funkspot
-   Score: 1.47
-   Because:
-     - Energy close to target 0.8 (+1.47)
-```
-
-### Adversarial 4: Acoustic bonus outweighs a genre/mood mismatch
-
-Profile: `{"genre": "metal", "mood": "angry", "energy": 0.18, "likes_acoustic": true}`
-
-"Morning Prelude" (classical/peaceful — a total mismatch on genre and mood) scores 2.50 and nearly ties "Static Truth" (mood-matched "angry") at 2.44, purely from stacking the energy and acoustic bonuses.
-
-```
-============================================================
-Adversarial 4: Acoustic bonus outweighs genre/mood mismatch
-Profile: {'genre': 'metal', 'mood': 'angry', 'energy': 0.18, 'likes_acoustic': True}
-----------------------------------------
-Returned 5 results (k=5)
-
-Top Recommendations
-========================================
-1. Iron Curtain - Razorback
-   Score: 3.31
-   Because:
-     - Mood match: angry (+2.0)
-     - Genre match: metal (+1.0)
-     - Energy close to target 0.18 (+0.31)
-
-2. Morning Prelude - Clara Voss
-   Score: 2.50
-   Because:
-     - Energy close to target 0.18 (+1.50)
-     - Acoustic bonus (+1.0)
-
-3. Static Truth - The Wrecks
-   Score: 2.44
-   Because:
-     - Mood match: angry (+2.0)
-     - Energy close to target 0.18 (+0.44)
-
-4. Spacewalk Thoughts - Orbit Bloom
-   Score: 2.35
-   Because:
-     - Energy close to target 0.18 (+1.35)
-     - Acoustic bonus (+1.0)
-
-5. Autumn Letter - Hollow Oak
-   Score: 2.30
-   Because:
-     - Energy close to target 0.18 (+1.30)
-     - Acoustic bonus (+1.0)
-```
-
-### Adversarial 5: Empty profile
-
-Profile: `{}`
-
-Every song scores 0.0, so ties resolve to whatever order the CSV loaded in (Python's stable sort) rather than any meaningful ranking, and the explanation string is empty.
-
-```
-============================================================
-Adversarial 5: Empty profile
-Profile: {}
-----------------------------------------
-Returned 5 results (k=5)
-
-Top Recommendations
-========================================
-1. Sunrise City - Neon Echo
-   Score: 0.00
-   Because:
-     - 
-
-2. Midnight Coding - LoRoom
-   Score: 0.00
-   Because:
-     - 
-
-3. Storm Runner - Voltline
-   Score: 0.00
-   Because:
-     - 
-
-4. Library Rain - Paper Lanterns
-   Score: 0.00
-   Because:
-     - 
-
-5. Gym Hero - Max Pulse
-   Score: 0.00
-   Because:
-     - 
-```
-
-### Adversarial 6: Case/whitespace mismatch
-
-Profile: `{"genre": "Pop", "mood": " happy", "energy": 0.8}`
-
-Exact string equality on `genre`/`mood` means `"Pop"` never matches `"pop"` and `" happy"` never matches `"happy"`, so every genre/mood point is silently lost and the top 5 collapses to pure energy-proximity ranking — even though a human would consider this profile a clear pop/happy match.
-
-```
-============================================================
-Adversarial 6: Case/whitespace mismatch
-Profile: {'genre': 'Pop', 'mood': ' happy', 'energy': 0.8}
-----------------------------------------
-Returned 5 results (k=5)
-
-Top Recommendations
-========================================
-1. Sunrise City - Neon Echo
-   Score: 1.47
-   Because:
-     - Energy close to target 0.8 (+1.47)
-
-2. Groove Tunnel - Funkspot
-   Score: 1.47
-   Because:
-     - Energy close to target 0.8 (+1.47)
-
-3. Rooftop Lights - Indigo Parade
-   Score: 1.44
-   Because:
-     - Energy close to target 0.8 (+1.44)
-
-4. Fuego Libre - Los Rayos
-   Score: 1.43
-   Because:
-     - Energy close to target 0.8 (+1.43)
-
-5. Night Drive Loop - Neon Echo
-   Score: 1.42
-   Because:
-     - Energy close to target 0.8 (+1.42)
+├── src/
+│   ├── main.py          # CLI entry point — loads data, runs sample profiles, prints results
+│   └── recommender.py   # Song/UserProfile/Recommender classes + scoring & ranking logic
+├── tests/
+│   └── test_recommender.py
+├── data/
+│   └── songs.csv         # 30-song catalog with genre, mood, energy, and other attributes
+├── model_card.md          # Design rationale, evaluation, limitations, and reflection
+└── requirements.txt
 ```
 
 ---
 
-## Experiments You Tried
+## Adversarial Testing & Robustness
 
-Use this section to document the experiments you ran. For example:
+To stress-test the scoring logic, I ran the recommender against deliberately adversarial user profiles and inspected the output. This surfaced real issues, all since fixed in the current implementation:
 
-- What happened when you changed the weight on genre from 2.0 to 0.5
-- What happened when you added tempo or valence to the score
-- How did your system behave for different types of users
+| Test | Input | Original behavior | Fix |
+|---|---|---|---|
+| Out-of-range energy | `energy: 5.0` | Score went deeply negative even for a mood+genre "perfect match" | Energy clamped to `[0, 1]` before scoring |
+| Non-numeric energy | `energy: "high"` | Crashed with a `TypeError` | N/A — caught via type-safe profile construction |
+| Negative `k` | `k=-1` | Returned 29 of 30 songs due to Python's negative-index slicing | `k` clamped to `max(k, 0)` |
+| Case/whitespace mismatch | `genre: "Pop"`, `mood: " happy"` | Genre/mood points silently lost, score dropped from 4.47 to 1.47 | Case-insensitive, whitespace-trimmed string comparison |
+| Empty profile | `{}` | Every song scored 0.0 — "ranking" was just CSV load order | Documented as an expected no-signal case |
 
-I tried halving the genre weight (1.0 → 0.5) and doubling the energy weight (1.5 → 3.0). Mood stayed the strongest signal either way, but genre became almost irrelevant next to energy - songs with the right energy but wrong genre started beating songs with the right genre but slightly-off energy. It made the recommendations feel more like "energy matching" than "taste matching."
-
----
-
-## Limitations and Risks
-
-Summarize some limitations of your recommender.
-
-Examples:
-
-- It only works on a tiny catalog
-- It does not understand lyrics or language
-- It might over favor one genre or mood
-
-Only 30 songs, most genres/moods have just one song, so results repeat easily. Genre and mood have to match exactly (case and spacing matter), so close matches get zero credit. It doesn't look at lyrics, artist, or listening history, just the 4 scored numbers. Energy math breaks if the target isn't between 0 and 1. Mood counts for the most points, so it can override a better overall fit.
-
-You will go deeper on this in your model card.
+Full before/after detail and reasoning lives in [`model_card.md`](model_card.md#7-evaluation).
 
 ---
 
-## Reflection
+## Design Decisions & Reflection
 
-Read and complete `model_card.md`:
+Building this made it clear that a recommender is, underneath, just a scoring formula with weights someone chose — there's no "understanding" of music, only numbers being compared. Small changes to those weights (like doubling the energy weight or halving the genre weight) noticeably shifted which songs won, which drove home how much a system's apparent "taste" depends on decisions made by the builder, not the user.
 
-[**Model Card**](model_card.md)
+It also surfaced where bias can hide in a system like this: through exact-match rules (typos or casing silently losing points), through which features get scored at all (valence and danceability are captured in the data but currently unused), and through a thin catalog where niche genres/moods have only one representative song. None of that looks like "bias" in the code — it looks like ordinary scoring — which is exactly what makes it easy to miss.
 
-Write 1 to 2 paragraphs here about what you learned:
+Full reflection, evaluation methodology, and future-work ideas are in [`model_card.md`](model_card.md).
 
-- about how recommenders turn data into predictions
-- about where bias or unfairness could show up in systems like this
+---
 
-Building this showed me that a recommender is really just a scoring formula someone chose weights for - there's no "understanding" of music, just numbers being compared. Small changes to those weights (like doubling energy or halving genre) noticeably changed which songs came out on top, which made me realize how much a system's "taste" depends on decisions the builder made, not the user.
+## Limitations
 
-Bias can sneak in through exact-match rules (typos or casing silently losing points), through which features get scored at all (valence and danceability are ignored here even though they're in the data), and through a thin catalog where niche genres/moods only have one song to ever recommend. None of that looks like "bias" in the code - it just looks like normal scoring - which is what makes it easy to miss.
-
-
-
+- Small catalog (30 songs); most genres/moods are singletons, which limits meaningful ranking within a category
+- No use of listening history, skips, or collaborative signals — purely content-based on stated preferences
+- Doesn't consider lyrics or audio beyond the provided tabular features
+- Mood carries the most weight by default, which can outweigh a better overall fit in the `balanced` strategy
