@@ -1,7 +1,11 @@
 import csv
+import dataclasses
 from abc import ABC, abstractmethod
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
 
 @dataclass
 class Song:
@@ -25,6 +29,13 @@ class Song:
     language: str = "english"
     explicit: bool = False
 
+    def __post_init__(self):
+        self.energy = _clamp01(self.energy)
+        self.valence = _clamp01(self.valence)
+        self.danceability = _clamp01(self.danceability)
+        self.acousticness = _clamp01(self.acousticness)
+        self.popularity = max(0, min(100, self.popularity))
+
 @dataclass
 class UserProfile:
     """
@@ -41,21 +52,47 @@ class UserProfile:
     min_popularity: Optional[int] = None
     avoid_explicit: bool = False
 
+    def __post_init__(self):
+        self.target_energy = _clamp01(self.target_energy)
+        if self.min_popularity is not None:
+            self.min_popularity = max(0, min(100, self.min_popularity))
+
+    def to_prefs_dict(self) -> Dict:
+        """Converts to the plain-dict shape expected by score_song/recommend_songs."""
+        return {
+            "genre": self.favorite_genre,
+            "mood": self.favorite_mood,
+            "energy": self.target_energy,
+            "likes_acoustic": self.likes_acoustic,
+            "secondary_mood": self.secondary_mood,
+            "preferred_decade": self.preferred_decade,
+            "preferred_language": self.preferred_language,
+            "min_popularity": self.min_popularity,
+            "avoid_explicit": self.avoid_explicit,
+        }
+
 class Recommender:
     """
     OOP implementation of the recommendation logic.
     Required by tests/test_recommender.py
+
+    Wraps the dict-based score_song/recommend_songs functions so there is a
+    single source of truth for scoring - this class just converts to/from
+    dataclasses at the boundary.
     """
     def __init__(self, songs: List[Song]):
         self.songs = songs
 
     def recommend(self, user: UserProfile, k: int = 5) -> List[Song]:
-        # TODO: Implement recommendation logic
-        return self.songs[:k]
+        k = max(k, 0)
+        song_dicts = [dataclasses.asdict(song) for song in self.songs]
+        ranked = recommend_songs(user.to_prefs_dict(), song_dicts, k=k)
+        songs_by_id = {song.id: song for song in self.songs}
+        return [songs_by_id[song_dict["id"]] for song_dict, _score, _reasons in ranked]
 
     def explain_recommendation(self, user: UserProfile, song: Song) -> str:
-        # TODO: Implement explanation logic
-        return "Explanation placeholder"
+        _score, reasons = score_song(user.to_prefs_dict(), dataclasses.asdict(song))
+        return "; ".join(reasons) if reasons else "No matching preferences found."
 
 INT_FIELDS = {"id", "tempo_bpm", "popularity"}
 FLOAT_FIELDS = {"energy", "valence", "danceability", "acousticness"}
@@ -106,17 +143,22 @@ class ScoringStrategy(ABC):
         reasons = []
         w = self.weights
 
-        if song["mood"] == user_prefs.get("mood"):
+        def normalize(value):
+            return value.strip().lower() if isinstance(value, str) else value
+
+        if normalize(song["mood"]) == normalize(user_prefs.get("mood")):
             score += w["mood"]
             reasons.append(f"Mood match: {song['mood']} (+{w['mood']:.2f})")
 
-        if song["genre"] == user_prefs.get("genre"):
+        if normalize(song["genre"]) == normalize(user_prefs.get("genre")):
             score += w["genre"]
             reasons.append(f"Genre match: {song['genre']} (+{w['genre']:.2f})")
 
         target_energy = user_prefs.get("energy")
         if target_energy is not None:
-            energy_points = w["energy"] * (1 - abs(song["energy"] - target_energy))
+            target_energy = _clamp01(target_energy)
+            song_energy = _clamp01(song["energy"])
+            energy_points = w["energy"] * (1 - abs(song_energy - target_energy))
             score += energy_points
             reasons.append(f"Energy close to target {target_energy} (+{energy_points:.2f})")
 
@@ -125,17 +167,18 @@ class ScoringStrategy(ABC):
             reasons.append(f"Acoustic bonus (+{w['acoustic']:.2f})")
 
         secondary_mood = user_prefs.get("secondary_mood")
-        if secondary_mood and secondary_mood in song["secondary_moods"].split("|"):
+        song_secondary_moods = [normalize(m) for m in song["secondary_moods"].split("|")]
+        if secondary_mood and normalize(secondary_mood) in song_secondary_moods:
             score += w["secondary_mood"]
             reasons.append(f"Secondary mood match: {secondary_mood} (+{w['secondary_mood']:.2f})")
 
         preferred_decade = user_prefs.get("preferred_decade")
-        if preferred_decade and song["release_decade"] == preferred_decade:
+        if preferred_decade and normalize(song["release_decade"]) == normalize(preferred_decade):
             score += w["decade"]
             reasons.append(f"Release decade match: {preferred_decade} (+{w['decade']:.2f})")
 
         preferred_language = user_prefs.get("preferred_language")
-        if preferred_language and song["language"] == preferred_language:
+        if preferred_language and normalize(song["language"]) == normalize(preferred_language):
             score += w["language"]
             reasons.append(f"Language match: {preferred_language} (+{w['language']:.2f})")
 
@@ -201,6 +244,7 @@ def recommend_songs(
     near-duplicates just because one artist/genre scored well.
     Set artist_penalty=0 and genre_penalty=0 to disable and get raw top-k by score.
     """
+    k = max(k, 0)
     strategy = strategy or STRATEGIES["balanced"]
     remaining = [
         (song, *strategy.score(user_prefs, song))
