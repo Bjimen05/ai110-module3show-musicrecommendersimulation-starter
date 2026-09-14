@@ -115,7 +115,7 @@ See [Adversarial Testing & Robustness](#adversarial-testing--robustness) for the
 
 ```
 Loading songs from data/songs.csv...
-Loaded songs: 30
+Loaded songs: 10000
 Ranking strategy: balanced
 
 User Profile
@@ -125,19 +125,22 @@ Mood: happy
 Energy: 0.8
 
 Top Recommendations
-+-----+-------------------+---------------+---------+------------------------------------------+
-|   # | Title             | Artist        |   Score | Reasons                                   |
-+=====+===================+===============+=========+============================================+
-|   1 | Sunrise City      | Neon Echo     |    4.47 | - Mood match: happy (+2.00)                |
-|     |                   |               |         | - Genre match: pop (+1.00)                 |
-|     |                   |               |         | - Energy close to target 0.8 (+1.47)       |
-+-----+-------------------+---------------+---------+------------------------------------------+
-|   2 | Rooftop Lights    | Indigo Parade |    3.44 | - Mood match: happy (+2.00)                |
-|     |                   |               |         | - Energy close to target 0.8 (+1.44)       |
-+-----+-------------------+---------------+---------+------------------------------------------+
-|   3 | Pixel Crush       | NOVA7         |    3.38 | - Mood match: happy (+2.00)                |
-|     |                   |               |         | - Energy close to target 0.8 (+1.38)       |
-+-----+-------------------+---------------+---------+------------------------------------------+
++-----+----------------------+------------------+---------+--------------------------------------+
+|   # | Title                | Artist           |   Score | Reasons                              |
++=====+======================+==================+=========+======================================+
+|   1 | Wild Horizon Glass   | AmberRoom6370    |    4.5  | - Mood match: happy (+2.00)          |
+|     |                      |                  |         | - Genre match: pop (+1.00)           |
+|     |                      |                  |         | - Energy close to target 0.8 (+1.50) |
++-----+----------------------+------------------+---------+--------------------------------------+
+|   2 | Neon Heart Distant   | PixelGarden7646  |    3.94 | - Mood match: happy (+2.00)          |
+|     |                      |                  |         | - Genre match: pop (+1.00)           |
+|     |                      |                  |         | - Energy close to target 0.8 (+1.44) |
+|     |                      |                  |         | - Diversity penalty for repeated     |
+|     |                      |                  |         | artist/genre (-0.50)                 |
++-----+----------------------+------------------+---------+--------------------------------------+
+|   3 | City Bloom Neon      | NeonTheory1266   |    3.5  | - Mood match: happy (+2.00)          |
+|     |                      |                  |         | - Energy close to target 0.8 (+1.50) |
++-----+----------------------+------------------+---------+--------------------------------------+
 ```
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or demo video link here -->
@@ -165,7 +168,7 @@ Tests in [`tests/test_recommender.py`](tests/test_recommender.py) exercise the O
 ├── tests/
 │   └── test_recommender.py
 ├── data/
-│   └── songs.csv         # 30-song catalog with genre, mood, energy, and other attributes
+│   └── songs.csv         # 10,000-song catalog with genre, mood, energy, and other attributes
 ├── model_card.md          # Design rationale, evaluation, limitations, and reflection
 └── requirements.txt
 ```
@@ -192,7 +195,7 @@ Full before/after detail and reasoning lives in [`model_card.md`](model_card.md#
 
 Building this made it clear that a recommender is, underneath, just a scoring formula with weights someone chose — there's no "understanding" of music, only numbers being compared. Small changes to those weights (like doubling the energy weight or halving the genre weight) noticeably shifted which songs won, which drove home how much a system's apparent "taste" depends on decisions made by the builder, not the user.
 
-It also surfaced where bias can hide in a system like this: through exact-match rules (typos or casing silently losing points), through which features get scored at all (valence and danceability are captured in the data but currently unused), and through a thin catalog where niche genres/moods have only one representative song. None of that looks like "bias" in the code — it looks like ordinary scoring — which is exactly what makes it easy to miss.
+It also surfaced where bias can hide in a system like this: through exact-match rules (typos or casing silently losing points) and through which features get scored at all (valence and danceability are captured in the data but currently unused). None of that looks like "bias" in the code — it looks like ordinary scoring — which is exactly what makes it easy to miss.
 
 Full reflection, evaluation methodology, and future-work ideas are in [`model_card.md`](model_card.md).
 
@@ -200,7 +203,7 @@ Full reflection, evaluation methodology, and future-work ideas are in [`model_ca
 
 ## Limitations
 
-- Small catalog (30 songs); most genres/moods are singletons, which limits meaningful ranking within a category
+- Catalog is procedurally generated (not real streaming data), so scores reflect synthetic attribute distributions rather than real listener behavior
 - No use of listening history, skips, or collaborative signals — purely content-based on stated preferences
 - Doesn't consider lyrics or audio beyond the provided tabular features
 - Mood carries the most weight by default, which can outweigh a better overall fit in the `balanced` strategy
